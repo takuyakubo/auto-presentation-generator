@@ -17,8 +17,15 @@ from app.schemas.presentation import Presentation, Slide, PresentationOptions
 logger = logging.getLogger(__name__)
 
 # OpenAIクライアントの初期化
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-logger.info(f"OpenAI API Key設定: {'設定済み' if os.getenv('OPENAI_API_KEY') else '未設定'}")
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    logger.error("OpenAI API Keyが設定されていません。環境変数OPENAI_API_KEYを設定してください。")
+    # デバッグ用にすべての環境変数をログに出力（本番環境では削除すること）
+    logger.debug(f"利用可能な環境変数: {os.environ.keys()}")
+
+# シンプルな初期化に変更
+client = OpenAI(api_key=api_key)
+logger.info(f"OpenAI API Key設定: {'設定済み' if api_key else '未設定'}")
 
 # メモリ内キャッシュ
 # 実際のアプリケーションではデータベース等の永続化層を使用する
@@ -56,8 +63,9 @@ async def generate_presentation_from_text(
 """
         logger.debug(f"System prompt: {system_prompt}")
         
+        # バージョン1.8.0に対応したAPI呼び出し
         response = await client.chat.completions.create(
-            model="gpt-4-turbo",
+            model="gpt-4",  # gpt-4-turboではなくgpt-4を使用
             messages=[
                 {
                     "role": "system",
@@ -105,7 +113,7 @@ async def generate_presentation_from_text(
                 continue
 
         # 画像生成と追加（実装予定）
-        if options.include_images and os.getenv("OPENAI_API_KEY"):
+        if options.include_images and api_key:
             logger.info("画像生成機能は現在実装中...")
             # TODO: DALL-Eや他の画像生成APIの実装
 
