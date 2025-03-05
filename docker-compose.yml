@@ -7,12 +7,13 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=http://backend:3001
     depends_on:
       - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    restart: unless-stopped
+    networks:
+      - presentation-network
 
   backend:
     build:
@@ -21,5 +22,15 @@ services:
       - "3001:3001"
     env_file:
       - ./backend-python/.env
+    restart: unless-stopped
+    networks:
+      - presentation-network
     volumes:
-      - ./backend-python:/app
+      - temp-data:/app/temp
+
+networks:
+  presentation-network:
+    driver: bridge
+
+volumes:
+  temp-data:
