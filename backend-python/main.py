@@ -116,15 +116,25 @@ async def download_presentation(presentation_id: str):
     
     # PowerPointファイルの生成
     logger.info(f"PowerPointファイル生成開始: ID={presentation_id}")
-    file_path = await generate_powerpoint_file(presentation)
-    logger.info(f"PowerPointファイル生成完了: {file_path}")
-    
-    # ファイルの送信
-    return FileResponse(
-        path=file_path,
-        filename=f"presentation-{presentation_id}.pptx",
-        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    )
+    try:
+        file_path = await generate_powerpoint_file(presentation)
+        logger.info(f"PowerPointファイル生成完了: {file_path}")
+        
+        # ファイルの送信
+        headers = {
+            "Content-Disposition": f"attachment; filename=presentation-{presentation_id}.pptx",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
+        
+        return FileResponse(
+            path=file_path,
+            filename=f"presentation-{presentation_id}.pptx",
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers=headers
+        )
+    except Exception as e:
+        logger.error(f"PowerPointファイル生成・ダウンロードエラー: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"PowerPointファイルの生成中にエラーが発生しました: {str(e)}")
 
 # オプション要求に対応（プリフライトリクエスト用）
 @app.options("/api/presentations/generate")
