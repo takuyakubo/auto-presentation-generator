@@ -78,12 +78,14 @@ export default function CreatePage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       console.log('使用するAPIエンドポイント:', `${apiUrl}/api/presentations/generate`);
       
+      // バックエンドのパラメータ名に合わせる
+      // Pythonバックエンドでは、スネークケースが一般的
       const response = await axios.post(`/api/presentations/generate`, {
         text,
         options: {
           theme: selectedTheme,
-          slide_count: slideCount,
-          include_images: includeImages
+          slide_count: slideCount,  // スネークケースに変更
+          include_images: includeImages  // スネークケースに変更
         }
       });
       
@@ -94,7 +96,7 @@ export default function CreatePage() {
     } catch (err: any) {
       console.error('Error generating presentation:', err);
       console.error('Error details:', err.response?.data || 'No response data');
-      setError('プレゼンテーションの生成中にエラーが発生しました。もう一度お試しください。');
+      setError(`プレゼンテーションの生成中にエラーが発生しました: ${err.response?.data?.detail || err.message}`);
     } finally {
       setLoading(false)
     }
