@@ -1,0 +1,57 @@
+version: '3.9'
+
+services:
+  frontend:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - DEBUG=*
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - presentation-network
+    # ログ設定
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: ./backend-python
+    ports:
+      - "3001:3001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      - OPENAI_API_KEY=dummy-api-key-for-testing  # ここを本番環境では実際のキーに変更
+      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
+    command: uvicorn main:app --host 0.0.0.0 --port 3001 --log-level debug --reload
+    restart: unless-stopped
+    networks:
+      - presentation-network
+    volumes:
+      - ./backend-python:/app
+      - temp-data:/app/temp
+    # ログ設定
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  presentation-network:
+    driver: bridge
+
+volumes:
+  temp-data:

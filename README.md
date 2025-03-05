@@ -35,11 +35,11 @@
 - Tailwind CSS
 - Axios
 
-### バックエンド
-- Node.js
-- Express
+### バックエンド（Python版）
+- Python 3.11+
+- FastAPI
 - OpenAI API
-- pptxgenjs（PowerPointファイル生成）
+- python-pptx
 
 ## プロジェクト構成
 
@@ -52,13 +52,14 @@ auto-presentation-generator/
 │   │   └── ...
 │   ├── public/              # 静的ファイル
 │   └── ...
-├── backend/                 # バックエンドAPIのソースコード
-│   ├── src/                 # ソースコード
-│   │   ├── controllers/     # APIコントローラー
-│   │   ├── routes/          # APIルート定義
-│   │   ├── services/        # ビジネスロジック
-│   │   └── types/           # 型定義
-│   └── ...
+├── backend-python/          # Pythonバックエンドのソースコード
+│   ├── app/                 # アプリケーションコード
+│   │   ├── schemas/         # データモデル定義
+│   │   ├── services/        # ビジネスロジック 
+│   │   └── ...
+│   ├── tests/               # テストコード
+│   └── main.py              # アプリケーションのエントリーポイント
+├── backend/                 # Node.jsバックエンドのソースコード（代替）
 └── docs/                    # プロジェクトドキュメント
 ```
 
@@ -67,26 +68,28 @@ auto-presentation-generator/
 ### 前提条件
 
 - Node.js (v16以上)
+- Python 3.11以上
 - npm または yarn
+- pip
 - OpenAI APIキー
 
 ### インストール手順
 
-#### バックエンド
+#### Pythonバックエンド
 
 ```bash
 # バックエンドディレクトリに移動
-cd backend
-
-# 依存関係のインストール
-npm install
+cd backend-python
 
 # 環境変数の設定
 cp .env.example .env
 # .envファイルを編集してOpenAI APIキーを設定
 
+# 依存関係のインストール
+pip install -r requirements.txt
+
 # 開発サーバーの起動
-npm run dev
+uvicorn main:app --reload
 ```
 
 #### フロントエンド
@@ -106,6 +109,28 @@ npm run dev
 - フロントエンド: http://localhost:3000
 - バックエンドAPI: http://localhost:3001
 
+### Docker Composeを使用する場合
+
+プロジェクトのルートディレクトリで以下のコマンドを実行します：
+
+```bash
+# バックエンドの.envファイルを作成
+cp backend-python/.env.example backend-python/.env
+# .envファイルを編集してOpenAI APIキーを設定
+
+# Dockerコンテナのビルドと起動
+docker-compose up --build
+```
+
+## テスト実行方法
+
+### Pythonバックエンドのテスト
+
+```bash
+cd backend-python
+pytest
+```
+
 ## 開発中の機能
 
 - リアルタイムコラボレーション機能
@@ -113,6 +138,11 @@ npm run dev
 - PDF形式での出力対応
 - AIによる画像生成機能の強化
 - 多言語対応
+
+## ブランチ情報
+
+- `main`: 安定版（Node.jsバックエンド）
+- `python-backend`: Pythonバックエンド実装版
 
 ## ライセンス
 
