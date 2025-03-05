@@ -31,45 +31,14 @@ if not api_key:
     # デバッグ用にすべての環境変数をログに出力（本番環境では削除すること）
     logger.debug(f"利用可能な環境変数: {list(os.environ.keys())}")
 
-# OpenAIクライアントのインスタンス作成（実装を変更）
+# OpenAIクライアントのインスタンス作成（バージョン0.28.1用）
 try:
-    from openai import OpenAI
-    client = OpenAI(api_key=api_key)
+    import openai
+    openai.api_key = api_key
     logger.info(f"OpenAI API Key設定: {'設定済み' if api_key else '未設定'}")
 except Exception as e:
     logger.error(f"OpenAIクライアント初期化エラー: {str(e)}")
-    # mockクライアント作成
-    logger.warning("モックOpenAIクライアントを使用します")
-    class MockOpenAI:
-        class ChatCompletions:
-            async def create(self, **kwargs):
-                class MockResponse:
-                    class Choice:
-                        class Message:
-                            content = json.dumps({
-                                "slides": [
-                                    {
-                                        "title": "モックスライド1",
-                                        "content": ["これはモックデータです", "OpenAI APIに接続できません"]
-                                    },
-                                    {
-                                        "title": "モックスライド2",
-                                        "content": ["APIキーを確認してください", "環境変数の設定を確認してください"]
-                                    }
-                                ]
-                            })
-                        
-                        def __init__(self):
-                            self.message = self.Message()
-                            
-                    choices = [Choice()]
-                
-                return MockResponse()
-                
-        def __init__(self):
-            self.chat = self.ChatCompletions()
-    
-    client = MockOpenAI()
+    # mockクライアントなし - ここでは実際のOpenAIクライアントを使用する
 
 # メモリ内キャッシュ
 # 実際のアプリケーションではデータベース等の永続化層を使用する
@@ -107,10 +76,10 @@ async def generate_presentation_from_text(
 """
         logger.debug(f"System prompt: {system_prompt}")
         
-        # バージョン1.8.0に対応したAPI呼び出し
+        # バージョン0.28.1に対応したAPI呼び出し
         try:
-            response = await client.chat.completions.create(
-                model="gpt-4",  # gpt-4-turboではなくgpt-4を使用
+            response = await openai.ChatCompletion.acreate(
+                model="gpt-4",
                 messages=[
                     {
                         "role": "system",
@@ -121,15 +90,16 @@ async def generate_presentation_from_text(
                         "content": text
                     }
                 ],
-                response_format={"type": "json_object"}
+                # response_format={"type": "json_object"}  # 0.28.1ではサポートされていない
             )
             logger.info("OpenAI APIからレスポンスを受信しました")
+            logger.debug(f"Response: {response}")
         except Exception as e:
             logger.error(f"OpenAI API呼び出しエラー: {str(e)}")
             raise ValueError(f"OpenAI APIの呼び出しに失敗しました: {str(e)}")
 
         # APIレスポンスからスライドデータを取得
-        response_content = response.choices[0].message.content
+        response_content = response['choices'][0]['message']['content']
         if not response_content:
             logger.error("OpenAI APIから空のレスポンスを受信")
             raise ValueError("レスポンスの生成に失敗しました")
