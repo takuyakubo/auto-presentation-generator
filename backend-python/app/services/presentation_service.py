@@ -7,25 +7,69 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 import tempfile
 
-from openai import OpenAI
+# 最初にOpenAIのバージョン確認
+try:
+    import openai
+    logger = logging.getLogger(__name__)
+    logger.info(f"OpenAI version: {openai.__version__}")
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.error("OpenAIライブラリがインストールされていません")
+except Exception as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"OpenAIライブラリのインポート中にエラーが発生しました: {str(e)}")
+
 from pptx import Presentation as PPTXPresentation
 from pptx.util import Inches, Pt
 
 from app.schemas.presentation import Presentation, Slide, PresentationOptions
-
-# ロガーの設定
-logger = logging.getLogger(__name__)
 
 # OpenAIクライアントの初期化
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     logger.error("OpenAI API Keyが設定されていません。環境変数OPENAI_API_KEYを設定してください。")
     # デバッグ用にすべての環境変数をログに出力（本番環境では削除すること）
-    logger.debug(f"利用可能な環境変数: {os.environ.keys()}")
+    logger.debug(f"利用可能な環境変数: {list(os.environ.keys())}")
 
-# シンプルな初期化に変更
-client = OpenAI(api_key=api_key)
-logger.info(f"OpenAI API Key設定: {'設定済み' if api_key else '未設定'}")
+# OpenAIクライアントのインスタンス作成（実装を変更）
+try:
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key)
+    logger.info(f"OpenAI API Key設定: {'設定済み' if api_key else '未設定'}")
+except Exception as e:
+    logger.error(f"OpenAIクライアント初期化エラー: {str(e)}")
+    # mockクライアント作成
+    logger.warning("モックOpenAIクライアントを使用します")
+    class MockOpenAI:
+        class ChatCompletions:
+            async def create(self, **kwargs):
+                class MockResponse:
+                    class Choice:
+                        class Message:
+                            content = json.dumps({
+                                "slides": [
+                                    {
+                                        "title": "モックスライド1",
+                                        "content": ["これはモックデータです", "OpenAI APIに接続できません"]
+                                    },
+                                    {
+                                        "title": "モックスライド2",
+                                        "content": ["APIキーを確認してください", "環境変数の設定を確認してください"]
+                                    }
+                                ]
+                            })
+                        
+                        def __init__(self):
+                            self.message = self.Message()
+                            
+                    choices = [Choice()]
+                
+                return MockResponse()
+                
+        def __init__(self):
+            self.chat = self.ChatCompletions()
+    
+    client = MockOpenAI()
 
 # メモリ内キャッシュ
 # 実際のアプリケーションではデータベース等の永続化層を使用する
@@ -64,20 +108,25 @@ async def generate_presentation_from_text(
         logger.debug(f"System prompt: {system_prompt}")
         
         # バージョン1.8.0に対応したAPI呼び出し
-        response = await client.chat.completions.create(
-            model="gpt-4",  # gpt-4-turboではなくgpt-4を使用
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": text
-                }
-            ],
-            response_format={"type": "json_object"}
-        )
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4",  # gpt-4-turboではなくgpt-4を使用
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": text
+                    }
+                ],
+                response_format={"type": "json_object"}
+            )
+            logger.info("OpenAI APIからレスポンスを受信しました")
+        except Exception as e:
+            logger.error(f"OpenAI API呼び出しエラー: {str(e)}")
+            raise ValueError(f"OpenAI APIの呼び出しに失敗しました: {str(e)}")
 
         # APIレスポンスからスライドデータを取得
         response_content = response.choices[0].message.content
