@@ -3,7 +3,7 @@ import logging
 import sys
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from typing import Optional
 from dotenv import load_dotenv
 import os
@@ -33,12 +33,14 @@ app = FastAPI(
 
 # CORS設定
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+logger.info(f"CORS allowed origins: {origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 開発中は全て許可
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # リクエストログミドルウェア
@@ -53,6 +55,8 @@ async def log_requests(request: Request, call_next):
         if body:
             body_str = body.decode("utf-8")
             logger.debug(f"Request body [{request_id}]: {body_str[:1000]}{'...' if len(body_str) > 1000 else ''}")
+            # ボディを再設定（FastAPIの制限により必要）
+            request._body = body
     except Exception as e:
         logger.warning(f"Failed to log request body [{request_id}]: {str(e)}")
     
@@ -62,6 +66,15 @@ async def log_requests(request: Request, call_next):
     
     logger.info(f"Response [{request_id}] - Status: {response.status_code} - Time: {process_time:.4f}s")
     return response
+
+# 例外ハンドラ
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
+    )
 
 # APIヘルスチェック
 @app.get("/api/health")
