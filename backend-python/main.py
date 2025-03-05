@@ -1,12 +1,12 @@
 import uvicorn
 import logging
 import sys
+import os
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from typing import Optional
 from dotenv import load_dotenv
-import os
 import time
 
 # サービスとスキーマのインポート
@@ -114,27 +114,28 @@ async def download_presentation(presentation_id: str):
         logger.warning(f"プレゼンテーションが見つかりません: ID={presentation_id}")
         raise HTTPException(status_code=404, detail="プレゼンテーションが見つかりません")
     
-    # PowerPointファイルの生成
-    logger.info(f"PowerPointファイル生成開始: ID={presentation_id}")
     try:
+        # PowerPointファイルの生成
+        logger.info(f"PowerPointファイル生成開始: ID={presentation_id}")
         file_path = await generate_powerpoint_file(presentation)
         logger.info(f"PowerPointファイル生成完了: {file_path}")
         
         # ファイルの送信
-        headers = {
-            "Content-Disposition": f"attachment; filename=presentation-{presentation_id}.pptx",
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        }
-        
-        return FileResponse(
+        response = FileResponse(
             path=file_path,
             filename=f"presentation-{presentation_id}.pptx",
-            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            headers=headers
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation"
         )
+        
+        # CORSヘッダーを追加
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
     except Exception as e:
-        logger.error(f"PowerPointファイル生成・ダウンロードエラー: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"PowerPointファイルの生成中にエラーが発生しました: {str(e)}")
+        logger.error(f"PowerPointファイル生成エラー: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"ファイル生成エラー: {str(e)}")
 
 # オプション要求に対応（プリフライトリクエスト用）
 @app.options("/api/presentations/generate")
