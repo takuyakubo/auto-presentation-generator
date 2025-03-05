@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import axios from 'axios'
 
@@ -19,21 +19,31 @@ type Presentation = {
 
 export default function PreviewPage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
   
   const [presentation, setPresentation] = useState<Presentation | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [currentSlide, setCurrentSlide] = useState(0)
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
     const fetchPresentation = async () => {
       try {
-        // 実際の実装では、APIからプレゼンテーションデータを取得
-        // const response = await axios.get(`/api/presentations/${id}`)
-        // setPresentation(response.data)
+        // APIから直接プレゼンテーションデータを取得
+        const apiUrl = 'http://localhost:3001';
+        setDebugInfo(`APIエンドポイント: ${apiUrl}/api/presentations/${id}`);
         
-        // デモ用のダミーデータ
+        const response = await axios.get(`${apiUrl}/api/presentations/${id}`);
+        setPresentation(response.data);
+        setDebugInfo(prev => `${prev}\nデータ取得成功: ${JSON.stringify(response.data).substring(0, 100)}...`);
+      } catch (err: any) {
+        console.error('Error fetching presentation:', err);
+        setError(`プレゼンテーションデータの取得中にエラーが発生しました: ${err.message}`);
+        setDebugInfo(prev => `${prev}\nエラー発生: ${err.message}\n${JSON.stringify(err.response?.data || {})}`);
+        
+        // エラー時にはダミーデータを使用
         const dummyPresentation: Presentation = {
           id,
           slides: [
@@ -62,9 +72,6 @@ export default function PreviewPage() {
         }
         
         setPresentation(dummyPresentation)
-      } catch (err) {
-        console.error('Error fetching presentation:', err)
-        setError('プレゼンテーションデータの取得中にエラーが発生しました。')
       } finally {
         setLoading(false)
       }
@@ -83,9 +90,19 @@ export default function PreviewPage() {
     }
   }
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (presentation) {
-      window.location.href = presentation.downloadUrl
+      try {
+        setDebugInfo(prev => `${prev}\nダウンロード開始: ${presentation.id}`);
+        const apiUrl = 'http://localhost:3001';
+        
+        // ブラウザでダウンロードを行う
+        window.location.href = `${apiUrl}/api/presentations/${presentation.id}/download`;
+        
+        setDebugInfo(prev => `${prev}\nダウンロードリクエスト送信完了`);
+      } catch (err: any) {
+        setDebugInfo(prev => `${prev}\nダウンロードエラー: ${err.message}`);
+      }
     }
   }
 
@@ -98,7 +115,7 @@ export default function PreviewPage() {
     )
   }
 
-  if (error) {
+  if (error && !presentation) {
     return (
       <div className="text-center py-20">
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded inline-block mb-4">
@@ -109,6 +126,13 @@ export default function PreviewPage() {
             新しいプレゼンテーションを作成
           </Link>
         </div>
+        
+        {debugInfo && (
+          <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-3 rounded mt-4 whitespace-pre-wrap overflow-auto max-h-40 text-left">
+            <strong>デバッグ情報:</strong>
+            <pre>{debugInfo}</pre>
+          </div>
+        )}
       </div>
     )
   }
@@ -252,6 +276,13 @@ export default function PreviewPage() {
           </li>
         </ul>
       </div>
+      
+      {debugInfo && (
+        <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-3 rounded mt-4 whitespace-pre-wrap overflow-auto max-h-40">
+          <strong>デバッグ情報:</strong>
+          <pre>{debugInfo}</pre>
+        </div>
+      )}
     </div>
   )
 }
