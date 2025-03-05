@@ -274,24 +274,42 @@ async def generate_powerpoint_file(presentation: Presentation) -> str:
         logger.error(f"PowerPointファイル生成エラー: {str(e)}")
         logger.debug(f"詳細なエラー: {traceback.format_exc()}")
         
-        # エラー時にはダミーのPowerPointファイルを生成
+        # エラー時にはデモファイルを返す
         try:
-            dummy_pptx = PPTXPresentation()
-            slide = dummy_pptx.slides.add_slide(dummy_pptx.slide_layouts[0])
-            slide.shapes.title.text = "エラーが発生しました"
+            # デモ用の簡易ファイルを作成
+            pptx = PPTXPresentation()
+            slide = pptx.slides.add_slide(pptx.slide_layouts[0])
+            title_shape = slide.shapes.title
+            if title_shape:
+                title_shape.text = "デモプレゼンテーション"
+            
+            # サブタイトル
             for shape in slide.placeholders:
                 if shape.placeholder_format.type == 2:  # サブタイトル
-                    shape.text = f"プレゼンテーションID: {presentation.id}\nエラー: {str(e)}"
+                    shape.text = "エラーが発生したため、デモファイルを生成しました"
                     break
             
-            file_name = f"error_presentation_{presentation.id}.pptx"
+            # エラースライド
+            slide = pptx.slides.add_slide(pptx.slide_layouts[1])
+            title_shape = slide.shapes.title
+            if title_shape:
+                title_shape.text = "エラー情報"
+            
+            content_shape = slide.placeholders[1]
+            text_frame = content_shape.text_frame
+            p = text_frame.paragraphs[0]
+            p.text = f"エラーが発生しました: {str(e)}"
+            
+            # 一時ファイルに保存
+            file_name = f"demo_presentation_{presentation.id}.pptx"
             file_path = os.path.join(TEMP_DIR, file_name)
-            dummy_pptx.save(file_path)
-            logger.info(f"エラー時のダミーファイルを生成: {file_path}")
+            pptx.save(file_path)
+            
+            logger.info(f"デモファイル生成完了: {file_path}")
             return file_path
-        except Exception as dummy_err:
-            logger.error(f"ダミーファイル生成エラー: {str(dummy_err)}")
-            raise ValueError(f"PowerPointファイルの生成中にエラーが発生しました: {str(e)}")
+        except Exception as demo_error:
+            logger.error(f"デモファイル生成エラー: {str(demo_error)}")
+            raise ValueError(f"PowerPointファイルの生成中にエラーが発生し、デモファイルの作成にも失敗しました: {str(e)}")
 
 
 def get_theme_settings(theme: str) -> Dict[str, Any]:
