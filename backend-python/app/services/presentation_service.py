@@ -1,6 +1,8 @@
 import os
 import json
 import uuid
+import logging
+import traceback
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 import tempfile
@@ -11,8 +13,12 @@ from pptx.util import Inches, Pt
 
 from app.schemas.presentation import Presentation, Slide, PresentationOptions
 
+# ロガーの設定
+logger = logging.getLogger(__name__)
+
 # OpenAIクライアントの初期化
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+logger.info(f"OpenAI API Key設定: {'設定済み' if os.getenv('OPENAI_API_KEY') else '未設定'}")
 
 # メモリ内キャッシュ
 # 実際のアプリケーションではデータベース等の永続化層を使用する
@@ -27,14 +33,14 @@ async def generate_presentation_from_text(
     if options is None:
         options = PresentationOptions()
     
+    logger.info(f"プレゼンテーション生成開始: テーマ={options.theme}, スライド数={options.slide_count}")
+    logger.debug(f"入力テキスト(先頭100文字): {text[:100]}...")
+    
     try:
         # GPT-4を使用してテキストからスライド構造を生成
-        response = await client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""あなたはプレゼンテーションのスペシャリストです。テキストから高品質なプレゼンテーションを作成します。
+        logger.info("OpenAI APIリクエスト送信中...")
+        
+        system_prompt = f"""あなたはプレゼンテーションのスペシャリストです。テキストから高品質なプレゼンテーションを作成します。
 以下のテーマでスライドを作成してください: {options.theme}
 スライド数の目安は約{options.slide_count}枚です。
 各スライドにはタイトルとコンテンツのリストを含めてください。
@@ -48,6 +54,14 @@ async def generate_presentation_from_text(
   ]
 }}
 """
+        logger.debug(f"System prompt: {system_prompt}")
+        
+        response = await client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -60,28 +74,42 @@ async def generate_presentation_from_text(
         # APIレスポンスからスライドデータを取得
         response_content = response.choices[0].message.content
         if not response_content:
+            logger.error("OpenAI APIから空のレスポンスを受信")
             raise ValueError("レスポンスの生成に失敗しました")
 
+        logger.debug(f"OpenAI APIレスポンス: {response_content[:300]}...")
+
         # JSONパース
-        parsed_response = json.loads(response_content)
-        slides_data = parsed_response.get("slides", [])
+        try:
+            parsed_response = json.loads(response_content)
+            slides_data = parsed_response.get("slides", [])
+            logger.info(f"パース成功: スライド数={len(slides_data)}")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSONパースエラー: {str(e)}")
+            logger.debug(f"パースできなかったJSON: {response_content}")
+            raise ValueError(f"JSONのパースに失敗しました: {str(e)}")
         
         # Slideオブジェクトに変換
         slides = []
-        for slide_data in slides_data:
-            slide = Slide(
-                title=slide_data["title"],
-                content=slide_data["content"],
-                image_url=slide_data.get("image_url")
-            )
-            slides.append(slide)
+        for i, slide_data in enumerate(slides_data):
+            try:
+                slide = Slide(
+                    title=slide_data["title"],
+                    content=slide_data["content"],
+                    image_url=slide_data.get("image_url")
+                )
+                slides.append(slide)
+            except KeyError as e:
+                logger.warning(f"スライド{i}のデータに必須キーがありません: {str(e)}")
+                # エラーをスキップして続行
+                continue
 
         # 画像生成と追加（実装予定）
         if options.include_images and os.getenv("OPENAI_API_KEY"):
+            logger.info("画像生成機能は現在実装中...")
             # TODO: DALL-Eや他の画像生成APIの実装
-            pass
 
-        # プレゼンテーションデータの生成
+        # プレゼンテーションデータの作成
         presentation_id = str(uuid.uuid4())
         presentation = Presentation(
             id=presentation_id,
@@ -93,61 +121,80 @@ async def generate_presentation_from_text(
 
         # キャッシュに保存
         presentations_cache[presentation_id] = presentation
+        logger.info(f"プレゼンテーション生成完了: ID={presentation_id}, スライド数={len(slides)}")
 
         return presentation
 
     except Exception as e:
-        print(f"Error generating presentation: {str(e)}")
+        logger.error(f"プレゼンテーション生成エラー: {str(e)}")
+        logger.debug(f"詳細なエラー: {traceback.format_exc()}")
         raise ValueError(f"プレゼンテーションの生成中にエラーが発生しました: {str(e)}")
 
 
 def get_presentation_by_id(presentation_id: str) -> Optional[Presentation]:
     """プレゼンテーションIDからプレゼンテーションデータを取得する"""
-    return presentations_cache.get(presentation_id)
+    presentation = presentations_cache.get(presentation_id)
+    if presentation:
+        logger.info(f"キャッシュからプレゼンテーションを取得: ID={presentation_id}")
+    else:
+        logger.warning(f"プレゼンテーションが見つかりません: ID={presentation_id}")
+    return presentation
 
 
 async def generate_powerpoint_file(presentation: Presentation) -> str:
     """プレゼンテーションをPowerPointファイルとして生成する"""
+    logger.info(f"PowerPointファイル生成開始: ID={presentation.id}, スライド数={len(presentation.slides)}")
+    
     try:
         # PowerPointファイルを作成
         pptx = PPTXPresentation()
         
         # テーマに基づいた設定
         theme_settings = get_theme_settings(presentation.theme)
+        logger.debug(f"テーマ設定: {theme_settings}")
         
         # 各スライドの生成
-        for slide_data in presentation.slides:
+        for i, slide_data in enumerate(presentation.slides):
+            logger.debug(f"スライド{i+1}作成中: タイトル={slide_data.title}")
+            
             # スライドの追加
-            slide_layout = pptx.slide_layouts[1]  # タイトルと内容のレイアウト
-            slide = pptx.slides.add_slide(slide_layout)
-            
-            # タイトルの設定
-            title_shape = slide.shapes.title
-            if title_shape:
-                title_shape.text = slide_data.title
-            
-            # コンテンツの設定
-            content_shape = slide.placeholders[1]  # コンテンツのプレースホルダー
-            text_frame = content_shape.text_frame
-            
-            # 各コンテンツ項目を一行ずつ追加
-            for i, content_item in enumerate(slide_data.content):
-                if i == 0:
-                    p = text_frame.paragraphs[0]
-                else:
-                    p = text_frame.add_paragraph()
-                p.text = content_item
-                p.level = 0  # 箱条書きレベル
+            try:
+                slide_layout = pptx.slide_layouts[1]  # タイトルと内容のレイアウト
+                slide = pptx.slides.add_slide(slide_layout)
+                
+                # タイトルの設定
+                title_shape = slide.shapes.title
+                if title_shape:
+                    title_shape.text = slide_data.title
+                
+                # コンテンツの設定
+                content_shape = slide.placeholders[1]  # コンテンツのプレースホルダー
+                text_frame = content_shape.text_frame
+                
+                # 各コンテンツ項目を一行ずつ追加
+                for j, content_item in enumerate(slide_data.content):
+                    if j == 0:
+                        p = text_frame.paragraphs[0]
+                    else:
+                        p = text_frame.add_paragraph()
+                    p.text = content_item
+                    p.level = 0  # 箇条書きレベル
+            except Exception as e:
+                logger.error(f"スライド{i+1}の生成中にエラーが発生: {str(e)}")
+                # このスライドはスキップして続行
         
         # 一時ファイルに保存
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pptx")
         temp_file.close()
+        logger.debug(f"一時ファイルに保存: {temp_file.name}")
         pptx.save(temp_file.name)
         
+        logger.info(f"PowerPointファイル生成完了: {temp_file.name}")
         return temp_file.name
     
     except Exception as e:
-        print(f"Error generating PowerPoint file: {str(e)}")
+        logger.error(f"PowerPointファイル生成エラー: {str(e)}")
+        logger.debug(f"詳細なエラー: {traceback.format_exc()}")
         raise ValueError(f"PowerPointファイルの生成中にエラーが発生しました: {str(e)}")
 
 
@@ -184,4 +231,5 @@ def get_theme_settings(theme: str) -> Dict[str, Any]:
         },
     }
     
+    logger.debug(f"テーマ {theme} の設定を取得")
     return themes.get(theme, themes["modern"])
