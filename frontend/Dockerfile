@@ -20,15 +20,11 @@ WORKDIR /app
 
 ENV NODE_ENV production
 
-# 適切なユーザー権限を設定
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-USER nextjs
-
-# ビルド済みファイルをコピー
+# アプリケーションをコピー
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/.next/server ./.next/server
+COPY --from=builder /app/.next/standalone ./
 
 # アプリケーションを起動
 CMD ["node", "server.js"]
