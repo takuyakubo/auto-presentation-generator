@@ -65,21 +65,36 @@ export default function CreatePage() {
     setError('')
     
     try {
-      // APIリクエストを送信する例
-      const response = await axios.post('/api/presentations/generate', {
+      console.log('APIリクエスト送信:', {
         text,
         options: {
           theme: selectedTheme,
           slideCount,
           includeImages
         }
-      })
+      });
+
+      // APIリクエストを送信
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      console.log('使用するAPIエンドポイント:', `${apiUrl}/api/presentations/generate`);
+      
+      const response = await axios.post(`/api/presentations/generate`, {
+        text,
+        options: {
+          theme: selectedTheme,
+          slide_count: slideCount,
+          include_images: includeImages
+        }
+      });
+      
+      console.log('APIレスポンス:', response.data);
       
       // 成功したら結果のIDでプレビューページに遷移
       router.push(`/preview/${response.data.id}`)
-    } catch (err) {
-      console.error('Error generating presentation:', err)
-      setError('プレゼンテーションの生成中にエラーが発生しました。もう一度お試しください。')
+    } catch (err: any) {
+      console.error('Error generating presentation:', err);
+      console.error('Error details:', err.response?.data || 'No response data');
+      setError('プレゼンテーションの生成中にエラーが発生しました。もう一度お試しください。');
     } finally {
       setLoading(false)
     }
