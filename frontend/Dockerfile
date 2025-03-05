@@ -1,30 +1,19 @@
-FROM node:18-alpine AS base
+FROM node:18-alpine
 
-# ビルドステージ
-FROM base AS builder
 WORKDIR /app
 
-# 依存関係ファイルをコピー
+# 依存関係をインストール
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-# ソースコードをコピー
+# アプリケーションファイルをコピー
 COPY . .
 
-# ビルド実行
+# Vite関連のファイルを削除
+RUN rm -f vite.config.ts tsconfig.node.json
+
+# アプリケーションをビルド
 RUN npm run build
 
-# 本番環境ステージ
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV production
-
-# アプリケーションをコピー
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/.next/server ./.next/server
-COPY --from=builder /app/.next/standalone ./
-
-# アプリケーションを起動
-CMD ["node", "server.js"]
+# 本番環境用サーバーを起動
+CMD ["npm", "start"]
