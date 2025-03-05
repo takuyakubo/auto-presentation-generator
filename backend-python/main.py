@@ -31,16 +31,14 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# CORS設定
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-logger.info(f"CORS allowed origins: {origins}")
+# CORS設定を完全に許可
+logger.info("CORSを完全に許可")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 開発中は全て許可
+    allow_origins=["*"],  # すべてのオリジンを許可
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"]
+    allow_methods=["*"],  # すべてのメソッドを許可
+    allow_headers=["*"],  # すべてのヘッダーを許可
 )
 
 # リクエストログミドルウェア
@@ -127,6 +125,19 @@ async def download_presentation(presentation_id: str):
         filename=f"presentation-{presentation_id}.pptx",
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation"
     )
+
+# オプション要求に対応（プリフライトリクエスト用）
+@app.options("/api/presentations/generate")
+async def options_generate():
+    return {}
+
+@app.options("/api/presentations/{presentation_id}")
+async def options_get_presentation(presentation_id: str):
+    return {}
+
+@app.options("/api/presentations/{presentation_id}/download")
+async def options_download_presentation(presentation_id: str):
+    return {}
 
 if __name__ == "__main__":
     logger.info("アプリケーション起動")
