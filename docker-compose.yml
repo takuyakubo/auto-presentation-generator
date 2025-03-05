@@ -9,7 +9,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://backend:3001
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
       - DEBUG=*
     depends_on:
       - backend
@@ -30,11 +30,11 @@ services:
       context: ./backend-python
     ports:
       - "3001:3001"
-    env_file:
-      - ./backend-python/.env
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=DEBUG
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
     command: uvicorn main:app --host 0.0.0.0 --port 3001 --log-level debug --reload
     restart: unless-stopped
     networks:
