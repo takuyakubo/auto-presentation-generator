@@ -52,6 +52,7 @@ export default function CreatePage() {
   const [includeImages, setIncludeImages] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [debugInfo, setDebugInfo] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,6 +64,7 @@ export default function CreatePage() {
     
     setLoading(true)
     setError('')
+    setDebugInfo('');
     
     try {
       console.log('APIリクエスト送信:', {
@@ -78,9 +80,12 @@ export default function CreatePage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       console.log('使用するAPIエンドポイント:', `${apiUrl}/api/presentations/generate`);
       
+      setDebugInfo(`APIエンドポイント: ${apiUrl}/api/presentations/generate`);
+      
       // バックエンドのパラメータ名に合わせる
       // Pythonバックエンドでは、スネークケースが一般的
-      const response = await axios.post(`/api/presentations/generate`, {
+      const directApiUrl = 'http://localhost:3001/api/presentations/generate';
+      const response = await axios.post(directApiUrl, {
         text,
         options: {
           theme: selectedTheme,
@@ -90,15 +95,28 @@ export default function CreatePage() {
       });
       
       console.log('APIレスポンス:', response.data);
+      setDebugInfo(prevInfo => `${prevInfo}\nAPIレスポンス成功: ${JSON.stringify(response.data).substring(0, 100)}...`);
       
       // 成功したら結果のIDでプレビューページに遷移
-      router.push(`/preview/${response.data.id}`)
+      router.push(`/preview/${response.data.id}`);
     } catch (err: any) {
       console.error('Error generating presentation:', err);
       console.error('Error details:', err.response?.data || 'No response data');
       setError(`プレゼンテーションの生成中にエラーが発生しました: ${err.response?.data?.detail || err.message}`);
+      
+      setDebugInfo(prevInfo => `${prevInfo}\nエラー発生: ${err.message}\nステータス: ${err.response?.status}\nデータ: ${JSON.stringify(err.response?.data || {})}`);
     } finally {
       setLoading(false)
+    }
+  }
+
+  // CORS確認テスト関数
+  const testBackendConnection = async () => {
+    try {
+      const result = await axios.get('http://localhost:3001/api/health');
+      setDebugInfo(`ヘルスチェック成功: ${JSON.stringify(result.data)}`);
+    } catch (err: any) {
+      setDebugInfo(`ヘルスチェックエラー: ${err.message}`);
     }
   }
 
@@ -201,24 +219,41 @@ export default function CreatePage() {
               {error}
             </div>
           )}
+          
+          {debugInfo && (
+            <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-3 rounded mb-4 whitespace-pre-wrap overflow-auto max-h-40">
+              <strong>デバッグ情報:</strong>
+              <pre>{debugInfo}</pre>
+            </div>
+          )}
 
-          <button
-            type="submit"
-            className="btn-primary px-6 py-3 flex items-center justify-center w-full sm:w-auto"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                生成中...
-              </>
-            ) : (
-              'プレゼンテーションを生成'
-            )}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              className="btn-primary px-6 py-3 flex items-center justify-center"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  生成中...
+                </>
+              ) : (
+                'プレゼンテーションを生成'
+              )}
+            </button>
+            
+            <button 
+              type="button"
+              className="btn-secondary"
+              onClick={testBackendConnection}
+            >
+              接続テスト
+            </button>
+          </div>
         </form>
       </div>
 
