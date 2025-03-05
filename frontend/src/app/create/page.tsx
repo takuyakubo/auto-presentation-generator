@@ -53,6 +53,9 @@ export default function CreatePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [debugInfo, setDebugInfo] = useState('');
+  
+  // このフラグをtrueにすることでデモモードを有効化
+  const isDemoMode = true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -76,7 +79,20 @@ export default function CreatePage() {
         }
       });
 
-      // APIリクエストを送信
+      // デモモードの場合、APIリクエストを送信せずにプレビューページに遷移
+      if (isDemoMode) {
+        // 適当なIDを生成
+        const demoId = 'demo-' + Math.random().toString(36).substring(2, 10);
+        setDebugInfo(`デモモード: API呼び出しをスキップして直接プレビューページに遷移します。ID=${demoId}`);
+        
+        // 少し待機してからプレビューページへ遷移（生成っぽさを演出）
+        setTimeout(() => {
+          router.push(`/preview/${demoId}`);
+        }, 1500);
+        return;
+      }
+
+      // 実際のAPIリクエストを送信（デモモードでなければ実行される）
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       console.log('使用するAPIエンドポイント:', `${apiUrl}/api/presentations/generate`);
       
@@ -113,6 +129,11 @@ export default function CreatePage() {
   // CORS確認テスト関数
   const testBackendConnection = async () => {
     try {
+      if (isDemoMode) {
+        setDebugInfo(`デモモード: 接続テストはスキップされます。`);
+        return;
+      }
+      
       const result = await axios.get('http://localhost:3001/api/health');
       setDebugInfo(`ヘルスチェック成功: ${JSON.stringify(result.data)}`);
     } catch (err: any) {
@@ -123,6 +144,13 @@ export default function CreatePage() {
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">プレゼンテーション生成</h1>
+      
+      {isDemoMode && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-6">
+          <p className="font-bold">デモモード</p>
+          <p>現在、デモモードで動作しています。入力されたテキストに関わらず、サンプルプレゼンテーションが表示されます。</p>
+        </div>
+      )}
       
       <div className="card mb-8">
         <form onSubmit={handleSubmit}>
