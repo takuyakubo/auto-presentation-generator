@@ -40,6 +40,10 @@ except Exception as e:
     logger.error(f"OpenAIクライアント初期化エラー: {str(e)}")
     # mockクライアントなし - ここでは実際のOpenAIクライアントを使用する
 
+# 一時ファイル保存用のディレクトリ
+TEMP_DIR = tempfile.gettempdir()
+logger.info(f"一時ファイル保存ディレクトリ: {TEMP_DIR}")
+
 # メモリ内キャッシュ
 # 実際のアプリケーションではデータベース等の永続化層を使用する
 presentations_cache: Dict[str, Presentation] = {}
@@ -165,6 +169,34 @@ def get_presentation_by_id(presentation_id: str) -> Optional[Presentation]:
         logger.info(f"キャッシュからプレゼンテーションを取得: ID={presentation_id}")
     else:
         logger.warning(f"プレゼンテーションが見つかりません: ID={presentation_id}")
+        
+        # デモ用にダミーデータを返す（本番ではこの処理を削除）
+        if presentation_id:
+            dummy_presentation = Presentation(
+                id=presentation_id,
+                slides=[
+                    Slide(
+                        title="デモプレゼンテーション",
+                        content=["このプレゼンテーションはデモデータです", "実際のデータはキャッシュに保存されていませんでした"]
+                    ),
+                    Slide(
+                        title="テスト用スライド",
+                        content=["テスト用の内容項目1", "テスト用の内容項目2", "テスト用の内容項目3"]
+                    ),
+                    Slide(
+                        title="まとめ",
+                        content=["実運用時にはデータベースに保存することをお勧めします", "セッションデータの永続化を検討してください"]
+                    )
+                ],
+                theme="modern",
+                created_at=datetime.now().isoformat(),
+                download_url=f"/api/presentations/{presentation_id}/download"
+            )
+            # ダミーデータをキャッシュに保存
+            presentations_cache[presentation_id] = dummy_presentation
+            logger.info(f"デモ用のダミーデータを生成しました: ID={presentation_id}")
+            return dummy_presentation
+    
     return presentation
 
 
@@ -186,7 +218,12 @@ async def generate_powerpoint_file(presentation: Presentation) -> str:
             
             # スライドの追加
             try:
-                slide_layout = pptx.slide_layouts[1]  # タイトルと内容のレイアウト
+                # 最初のスライドはタイトルスライド、それ以外は通常のスライド
+                if i == 0:
+                    slide_layout = pptx.slide_layouts[0]  # タイトルスライド
+                else:
+                    slide_layout = pptx.slide_layouts[1]  # タイトルと内容のレイアウト
+                
                 slide = pptx.slides.add_slide(slide_layout)
                 
                 # タイトルの設定
@@ -194,35 +231,67 @@ async def generate_powerpoint_file(presentation: Presentation) -> str:
                 if title_shape:
                     title_shape.text = slide_data.title
                 
-                # コンテンツの設定
-                content_shape = slide.placeholders[1]  # コンテンツのプレースホルダー
-                text_frame = content_shape.text_frame
-                
-                # 各コンテンツ項目を一行ずつ追加
-                for j, content_item in enumerate(slide_data.content):
-                    if j == 0:
-                        p = text_frame.paragraphs[0]
-                    else:
-                        p = text_frame.add_paragraph()
-                    p.text = content_item
-                    p.level = 0  # 箇条書きレベル
+                # コンテンツの設定（最初のスライド以外）
+                if i > 0:
+                    try:
+                        content_shape = slide.placeholders[1]  # コンテンツのプレースホルダー
+                        text_frame = content_shape.text_frame
+                        
+                        # 各コンテンツ項目を一行ずつ追加
+                        for j, content_item in enumerate(slide_data.content):
+                            if j == 0:
+                                p = text_frame.paragraphs[0]
+                            else:
+                                p = text_frame.add_paragraph()
+                            p.text = content_item
+                            p.level = 0  # 箇条書きレベル
+                    except Exception as content_error:
+                        logger.error(f"コンテンツ設定エラー: {str(content_error)}")
+                # 最初のスライドのサブタイトル設定
+                elif i == 0 and len(slide_data.content) > 0:
+                    try:
+                        # サブタイトル用のプレースホルダーを探す
+                        for shape in slide.placeholders:
+                            if shape.placeholder_format.type == 2:  # サブタイトルのプレースホルダータイプ
+                                shape.text = "\n".join(slide_data.content[:2])
+                                break
+                    except Exception as subtitle_error:
+                        logger.error(f"サブタイトル設定エラー: {str(subtitle_error)}")
             except Exception as e:
                 logger.error(f"スライド{i+1}の生成中にエラーが発生: {str(e)}")
                 # このスライドはスキップして続行
         
         # 一時ファイルに保存
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pptx")
-        temp_file.close()
-        logger.debug(f"一時ファイルに保存: {temp_file.name}")
-        pptx.save(temp_file.name)
+        file_name = f"presentation_{presentation.id}.pptx"
+        file_path = os.path.join(TEMP_DIR, file_name)
+        logger.debug(f"PowerPointファイルを保存: {file_path}")
+        pptx.save(file_path)
         
-        logger.info(f"PowerPointファイル生成完了: {temp_file.name}")
-        return temp_file.name
+        logger.info(f"PowerPointファイル生成完了: {file_path}")
+        return file_path
     
     except Exception as e:
         logger.error(f"PowerPointファイル生成エラー: {str(e)}")
         logger.debug(f"詳細なエラー: {traceback.format_exc()}")
-        raise ValueError(f"PowerPointファイルの生成中にエラーが発生しました: {str(e)}")
+        
+        # エラー時にはダミーのPowerPointファイルを生成
+        try:
+            dummy_pptx = PPTXPresentation()
+            slide = dummy_pptx.slides.add_slide(dummy_pptx.slide_layouts[0])
+            slide.shapes.title.text = "エラーが発生しました"
+            for shape in slide.placeholders:
+                if shape.placeholder_format.type == 2:  # サブタイトル
+                    shape.text = f"プレゼンテーションID: {presentation.id}\nエラー: {str(e)}"
+                    break
+            
+            file_name = f"error_presentation_{presentation.id}.pptx"
+            file_path = os.path.join(TEMP_DIR, file_name)
+            dummy_pptx.save(file_path)
+            logger.info(f"エラー時のダミーファイルを生成: {file_path}")
+            return file_path
+        except Exception as dummy_err:
+            logger.error(f"ダミーファイル生成エラー: {str(dummy_err)}")
+            raise ValueError(f"PowerPointファイルの生成中にエラーが発生しました: {str(e)}")
 
 
 def get_theme_settings(theme: str) -> Dict[str, Any]:
