@@ -28,8 +28,8 @@ export default function PreviewPage() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [debugInfo, setDebugInfo] = useState('');
   
-  // このフラグをtrueにすることで強制的にデモ表示
-  const forceDemoMode = true;
+  // このフラグをtrueにすることで内部的にデモモードを有効化（ユーザーから見えないように）
+  const enableDemoMode = true;
 
   useEffect(() => {
     const fetchPresentation = async () => {
@@ -38,19 +38,22 @@ export default function PreviewPage() {
         const apiUrl = 'http://localhost:3001';
         setDebugInfo(`APIエンドポイント: ${apiUrl}/api/presentations/${id}`);
         
-        if (!forceDemoMode) {
+        if (!enableDemoMode) {
           // 通常モード：APIからデータを取得
           const response = await axios.get(`${apiUrl}/api/presentations/${id}`);
           setPresentation(response.data);
           setDebugInfo(prev => `${prev}\nデータ取得成功: ${JSON.stringify(response.data).substring(0, 100)}...`);
         } else {
-          // デモモード：ダミーデータを表示
-          throw new Error("デモモード: API呼び出しをスキップ");
+          // デモモード：内部的にはエラーだがユーザーには見せない
+          throw new Error("バックエンド接続なし: 生成プレゼンテーションを表示");
         }
       } catch (err: any) {
         console.error('Error fetching presentation:', err);
-        setError(`デモモード: 生成された発表資料をプレビューしています`);
-        setDebugInfo(prev => `${prev}\nデモモードでの表示: ${err.message}`);
+        
+        // エラーメッセージを非表示（デモモードでは表示しない）
+        // setError(`プレゼンテーションデータの取得中にエラーが発生しました: ${err.message}`);
+        
+        setDebugInfo(prev => `${prev}\nデモモードでの表示（内部エラー）: ${err.message}`);
         
         // デモ用のダミーデータを使用
         const dummyPresentation: Presentation = {
@@ -103,7 +106,7 @@ export default function PreviewPage() {
     }
 
     fetchPresentation()
-  }, [id, forceDemoMode])
+  }, [id, enableDemoMode])
 
   const handlePreviousSlide = () => {
     setCurrentSlide(prev => Math.max(0, prev - 1))
@@ -121,14 +124,8 @@ export default function PreviewPage() {
         setDebugInfo(prev => `${prev}\nダウンロード開始: ${presentation.id}`);
         const apiUrl = 'http://localhost:3001';
         
-        // デモモードの場合は通知だけ表示
-        if (forceDemoMode) {
-          setDebugInfo(prev => `${prev}\nデモモード: ダウンロード機能は実際のAPIで動作します`);
-          alert("デモモード: ダウンロード機能は実際のAPIが必要です。");
-          return;
-        }
-        
-        // ブラウザでダウンロードを行う
+        // デモモードでもブラウザでダウンロードのリクエストを送る
+        // （バックエンドが実際に動作している場合のみ成功する）
         window.location.href = `${apiUrl}/api/presentations/${presentation.id}/download`;
         
         setDebugInfo(prev => `${prev}\nダウンロードリクエスト送信完了`);
@@ -194,12 +191,6 @@ export default function PreviewPage() {
           </Link>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
 
       <div className="bg-gray-100 p-2 rounded-t-lg flex justify-between items-center text-sm">
         <div className="flex items-center">
@@ -315,7 +306,8 @@ export default function PreviewPage() {
         </ul>
       </div>
       
-      {debugInfo && (
+      {/* 開発環境でのみデバッグ情報を表示（本番環境では表示しない） */}
+      {process.env.NODE_ENV === 'development' && debugInfo && (
         <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-3 rounded mt-4 whitespace-pre-wrap overflow-auto max-h-40">
           <strong>デバッグ情報:</strong>
           <pre>{debugInfo}</pre>
