@@ -55,7 +55,7 @@ export default function CreatePage() {
   const [debugInfo, setDebugInfo] = useState('');
   
   // 内部的にデモモードを有効化（ユーザーには見えない）
-  const enableDemoMode = true;
+  const enableDemoMode = false;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
