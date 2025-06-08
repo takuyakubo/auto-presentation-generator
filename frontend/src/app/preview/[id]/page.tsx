@@ -29,7 +29,7 @@ export default function PreviewPage() {
   const [debugInfo, setDebugInfo] = useState('');
   
   // このフラグをtrueにすることで内部的にデモモードを有効化（ユーザーから見えないように）
-  const enableDemoMode = true;
+  const enableDemoMode = false;
 
   useEffect(() => {
     const fetchPresentation = async () => {
