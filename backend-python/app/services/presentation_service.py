@@ -34,7 +34,7 @@ if not api_key:
     # デバッグ用にすべての環境変数をログに出力（本番環境では削除すること）
     logger.debug(f"利用可能な環境変数: {list(os.environ.keys())}")
 
-# OpenAIクライアントのインスタンス作成（新バージョン用）
+# OpenAIクライアントのインスタンス作成
 try:
     client = OpenAI(api_key=api_key) if api_key else None
     logger.info(f"OpenAI client initialized: {'設定済み' if client else '未設定'}")
@@ -82,12 +82,12 @@ async def generate_presentation_from_text(
 """
         logger.debug(f"System prompt: {system_prompt}")
         
-        # 新バージョンに対応したAPI呼び出し
+        # OpenAI APIの呼び出し
         try:
             if not client:
                 raise ValueError("OpenAI クライアントが初期化されていません")
             
-            # OpenAI APIの呼び出し
+            # 非同期コンテキストでの同期API呼び出し
             response = await asyncio.to_thread(
                 client.chat.completions.create,
                 model="gpt-4",
