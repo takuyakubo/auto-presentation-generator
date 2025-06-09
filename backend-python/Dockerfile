@@ -9,8 +9,6 @@ RUN apt-get update && apt-get install -y \
 # 作業ディレクトリの設定
 WORKDIR /app
 
-# OpenAIライブラリは requirements.txt に含まれているため、ここでは個別にインストールしない
-
 # 依存関係のインストール
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
