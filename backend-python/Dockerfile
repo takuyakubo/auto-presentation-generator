@@ -9,9 +9,6 @@ RUN apt-get update && apt-get install -y \
 # 作業ディレクトリの設定
 WORKDIR /app
 
-# OpenAIライブラリのバージョンを明示的に固定
-RUN pip install --no-cache-dir openai==0.28.1
-
 # 依存関係のインストール
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
