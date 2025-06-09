@@ -3,21 +3,24 @@ import json
 import uuid
 import logging
 import traceback
+import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 import tempfile
 
-# 最初にOpenAIのバージョン確認
+# ロガーの初期化
+logger = logging.getLogger(__name__)
+
+# OpenAIのインポート
 try:
-    import openai
-    logger = logging.getLogger(__name__)
-    logger.info(f"OpenAI version: {openai.__version__}")
+    from openai import OpenAI
+    logger.info(f"OpenAI library imported successfully")
 except ImportError:
-    logger = logging.getLogger(__name__)
     logger.error("OpenAIライブラリがインストールされていません")
+    raise
 except Exception as e:
-    logger = logging.getLogger(__name__)
     logger.error(f"OpenAIライブラリのインポート中にエラーが発生しました: {str(e)}")
+    raise
 
 from pptx import Presentation as PPTXPresentation
 from pptx.util import Inches, Pt
@@ -31,14 +34,13 @@ if not api_key:
     # デバッグ用にすべての環境変数をログに出力（本番環境では削除すること）
     logger.debug(f"利用可能な環境変数: {list(os.environ.keys())}")
 
-# OpenAIクライアントのインスタンス作成（バージョン0.28.1用）
+# OpenAIクライアントのインスタンス作成（新バージョン用）
 try:
-    import openai
-    openai.api_key = api_key
-    logger.info(f"OpenAI API Key設定: {'設定済み' if api_key else '未設定'}")
+    client = OpenAI(api_key=api_key) if api_key else None
+    logger.info(f"OpenAI client initialized: {'設定済み' if client else '未設定'}")
 except Exception as e:
     logger.error(f"OpenAIクライアント初期化エラー: {str(e)}")
-    # mockクライアントなし - ここでは実際のOpenAIクライアントを使用する
+    client = None
 
 # 一時ファイル保存用のディレクトリ
 TEMP_DIR = tempfile.gettempdir()
@@ -80,9 +82,14 @@ async def generate_presentation_from_text(
 """
         logger.debug(f"System prompt: {system_prompt}")
         
-        # バージョン0.28.1に対応したAPI呼び出し
+        # 新バージョンに対応したAPI呼び出し
         try:
-            response = await openai.ChatCompletion.acreate(
+            if not client:
+                raise ValueError("OpenAI クライアントが初期化されていません")
+            
+            # OpenAI APIの呼び出し
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
                 model="gpt-4",
                 messages=[
                     {
@@ -94,7 +101,7 @@ async def generate_presentation_from_text(
                         "content": text
                     }
                 ],
-                # response_format={"type": "json_object"}  # 0.28.1ではサポートされていない
+                response_format={"type": "json_object"}  # JSON形式を強制
             )
             logger.info("OpenAI APIからレスポンスを受信しました")
             logger.debug(f"Response: {response}")
@@ -103,7 +110,7 @@ async def generate_presentation_from_text(
             raise ValueError(f"OpenAI APIの呼び出しに失敗しました: {str(e)}")
 
         # APIレスポンスからスライドデータを取得
-        response_content = response['choices'][0]['message']['content']
+        response_content = response.choices[0].message.content
         if not response_content:
             logger.error("OpenAI APIから空のレスポンスを受信")
             raise ValueError("レスポンスの生成に失敗しました")
